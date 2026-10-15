@@ -6,6 +6,7 @@ from numbers import Number
 
 import numpy as np
 from scipy import sparse
+from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.model_selection import ShuffleSplit
 from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -265,7 +266,8 @@ class ValidSplit:
         self.cv = cv
 
     def _is_stratified(self, cv):
-        return isinstance(cv, (StratifiedKFold, StratifiedShuffleSplit))
+        return isinstance(cv, (
+            RepeatedStratifiedKFold, StratifiedKFold, StratifiedShuffleSplit))
 
     def _is_float(self, x):
         if not isinstance(x, Number):

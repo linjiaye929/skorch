@@ -905,6 +905,86 @@ class TestValidSplit:
         assert np.allclose(X[n:], X_valid)
         assert np.allclose(y[n:], y_valid)
 
+    @staticmethod
+    @pytest.mark.parametrize('stratified', [False, True])
+    @pytest.mark.parametrize('as_tensor', [False, True])
+    def test_repeated_stratified_kfold(
+            valid_split_cls, dataset_cls, stratified, as_tensor):
+        from sklearn.model_selection import RepeatedStratifiedKFold
+
+        X = np.arange(24).reshape(12, 2)
+        y = np.tile([0, 1], 6)
+        cv = RepeatedStratifiedKFold(
+            n_splits=3, n_repeats=2, random_state=0)
+        expected_train, expected_valid = next(cv.split(X, y))
+        if as_tensor:
+            y = torch.as_tensor(y)
+
+        train, valid = valid_split_cls(cv, stratified=stratified)(
+            dataset_cls(X, y), y)
+
+        np.testing.assert_array_equal(train.indices, expected_train)
+        np.testing.assert_array_equal(valid.indices, expected_valid)
+
+    @staticmethod
+    @pytest.mark.parametrize('stratified', [False, True])
+    def test_repeated_stratified_kfold_without_y_raises(
+            valid_split_cls, dataset_cls, stratified):
+        from sklearn.model_selection import RepeatedStratifiedKFold
+
+        X = np.arange(24).reshape(12, 2)
+        y = np.tile([0, 1], 6)
+        cv = RepeatedStratifiedKFold(
+            n_splits=3, n_repeats=2, random_state=0)
+
+        error = ValueError if stratified else TypeError
+        with pytest.raises(error) as exc:
+            valid_split_cls(cv, stratified=stratified)(dataset_cls(X, y))
+
+        if stratified:
+            expected = "Stratified CV requires explicitly passing a suitable y."
+            assert exc.value.args[0] == expected
+
+    @staticmethod
+    @pytest.mark.parametrize('container', [list, dict])
+    def test_kfold_with_structured_y(
+            valid_split_cls, dataset_cls, container):
+        from sklearn.model_selection import KFold
+
+        X = np.arange(24).reshape(12, 2)
+        y = [np.zeros(12), np.ones(12)]
+        if container is dict:
+            y = dict(zip(['a', 'b'], y))
+
+        cv = KFold(n_splits=3)
+        expected_train, expected_valid = next(cv.split(X))
+        train, valid = valid_split_cls(cv)(dataset_cls(X, y), y)
+
+        np.testing.assert_array_equal(train.indices, expected_train)
+        np.testing.assert_array_equal(valid.indices, expected_valid)
+
+    @staticmethod
+    @pytest.mark.parametrize('stratified', [False, True])
+    @pytest.mark.parametrize('shuffle', [False, True])
+    def test_stratified_cv_object_first_fold(
+            valid_split_cls, dataset_cls, stratified, shuffle):
+        from sklearn.model_selection import StratifiedKFold
+        from sklearn.model_selection import StratifiedShuffleSplit
+
+        X = np.arange(24).reshape(12, 2)
+        y = np.tile([0, 1], 6)
+        if shuffle:
+            cv = StratifiedShuffleSplit(
+                n_splits=2, test_size=1 / 3, random_state=0)
+        else:
+            cv = StratifiedKFold(n_splits=3)
+        expected_train, expected_valid = next(cv.split(X, y))
+        train, valid = valid_split_cls(cv, stratified=stratified)(
+            dataset_cls(X, y), y)
+
+        np.testing.assert_array_equal(train.indices, expected_train)
+        np.testing.assert_array_equal(valid.indices, expected_valid)
+
     def test_random_state_not_used_raises(self, valid_split_cls):
         # Since there is no randomness involved, raise a ValueError when
         # random_state is set, same as sklearn is now doing.
